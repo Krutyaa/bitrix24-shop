@@ -1,12 +1,16 @@
 let products = [];
 let cart = JSON.parse(localStorage.getItem('cart')) || {};
 
+
 async function fetchProducts() {
     try {
         const response = await fetch('/api/products');
         if (!response.ok) throw new Error('Ошибка сервера');
+
         products = await response.json();
+
         renderProducts();
+        renderCart();
     } catch (e) {
         document.getElementById('products-grid').innerHTML = `
             <div class="col-span-2 p-4 bg-red-50 text-red-700 rounded-lg">
@@ -59,6 +63,7 @@ function saveAndRenderCart() {
     renderCart();
 }
 
+
 function renderCart() {
     const container = document.getElementById('cart-items');
     const cartCountEl = document.getElementById('cart-count');
@@ -70,38 +75,79 @@ function renderCart() {
     let totalPrice = 0;
 
     if (entries.length === 0) {
-        container.innerHTML = '<p class="text-gray-400 text-sm py-2">Корзина пуста</p>';
+        container.innerHTML =
+            '<p class="text-gray-400 text-sm py-2">Корзина пуста</p>';
+
         cartCountEl.textContent = '0';
         cartTotalEl.textContent = '0';
         sidebarTotalEl.textContent = '0 ₽';
         return;
     }
 
-    container.innerHTML = entries.map(([id, qty]) => {
-        const product = products.find(p => p.id == id);
-        if (!product) return '';
-        totalCount += qty;
-        totalPrice += product.price * qty;
+    // Пока каталог не загружен, не показываем ложную пустую корзину.
+    if (products.length === 0) {
+        container.innerHTML =
+            '<p class="text-gray-500 text-sm py-2">Загружаем корзину...</p>';
+
+        cartCountEl.textContent = entries.reduce(
+            (sum, [, qty]) => sum + Number(qty || 0), 0
+        );
+
+        return;
+    }
+
+    const rows = entries.map(([id, qty]) => {
+        const product = products.find(p => String(p.id) === String(id));
+        const quantity = Number(qty);
+
+        if (!product) {
+            return `
+                <div class="py-2 text-sm text-red-600">
+                    Товар с ID ${escapeHtml(String(id))} не найден в каталоге.
+                    <button onclick="removeFromCart('${id}')"
+                            class="underline ml-1">
+                        Удалить
+                    </button>
+                </div>
+            `;
+        }
+
+        totalCount += quantity;
+        totalPrice += Number(product.price) * quantity;
 
         return `
             <div class="py-2 flex justify-between items-center">
                 <div>
-                    <p class="font-medium text-sm">${escapeHtml(product.name)}</p>
-                    <p class="text-xs text-gray-500">${product.price} ₽ × ${qty}</p>
+                    <p class="font-medium text-sm">
+                        ${escapeHtml(product.name)}
+                    </p>
+                    <p class="text-xs text-gray-500">
+                        ${Number(product.price).toLocaleString()} ₽ × ${quantity}
+                    </p>
                 </div>
                 <div class="flex items-center space-x-2">
-                    <button onclick="updateQuantity(${id}, -1)" class="px-2 bg-gray-100 rounded hover:bg-gray-200">-</button>
-                    <span class="text-sm font-bold">${qty}</span>
-                    <button onclick="updateQuantity(${id}, 1)" class="px-2 bg-gray-100 rounded hover:bg-gray-200">+</button>
+                    <button onclick="updateQuantity(${Number(product.id)}, -1)"
+                            class="px-2 bg-gray-100 rounded hover:bg-gray-200">-</button>
+                    <span class="text-sm font-bold">${quantity}</span>
+                    <button onclick="updateQuantity(${Number(product.id)}, 1)"
+                            class="px-2 bg-gray-100 rounded hover:bg-gray-200">+</button>
                 </div>
             </div>
         `;
-    }).join('');
+    });
+
+    container.innerHTML = rows.join('');
 
     cartCountEl.textContent = totalCount;
     cartTotalEl.textContent = totalPrice.toLocaleString();
     sidebarTotalEl.textContent = totalPrice.toLocaleString() + ' ₽';
 }
+
+function removeFromCart(productId) {
+    delete cart[productId];
+    saveAndRenderCart();
+}
+
 
 document.getElementById('order-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -139,8 +185,14 @@ document.getElementById('order-form').addEventListener('submit', async (e) => {
         saveAndRenderCart();
         document.getElementById('order-form').reset();
 
+
         resultBox.className = 'mt-4 p-3 rounded-lg text-sm bg-green-50 text-green-800 border border-green-200';
-        resultBox.innerHTML = `<b>Заказ оформлен!</b><br>ID сделки в Битрикс24: <b>#${data.orderId}</b>`;
+
+        resultBox.innerHTML = `
+        <b>Заказ оформлен!</b><br>
+        ID сделки в Битрикс24: <b>#${data.orderId}</b><br>
+        Сумма заказа: <b>${Number(data.totalAmount).toLocaleString('ru-RU')} ₽</b>`;
+
         resultBox.classList.remove('hidden');
 
     } catch (err) {
@@ -154,4 +206,3 @@ document.getElementById('order-form').addEventListener('submit', async (e) => {
 });
 
 fetchProducts();
-renderCart();

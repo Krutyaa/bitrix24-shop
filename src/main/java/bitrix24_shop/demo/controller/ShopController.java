@@ -1,6 +1,7 @@
 package bitrix24_shop.demo.controller;
 
 import bitrix24_shop.demo.model.OrderRequest;
+import bitrix24_shop.demo.model.OrderResult;
 import bitrix24_shop.demo.model.Product;
 import bitrix24_shop.demo.service.BitrixService;
 import jakarta.validation.Valid;
@@ -25,11 +26,15 @@ public class ShopController {
     }
 
     @PostMapping("/order")
-    public Map<String, Object> createOrder(@Valid @RequestBody OrderRequest request) {
-        Long orderId = bitrixService.createOrder(request);
+    public Map<String, Object> createOrder(
+            @Valid @RequestBody OrderRequest request
+    ) {
+        OrderResult result = bitrixService.createOrder(request);
+
         return Map.of(
                 "success", true,
-                "orderId", orderId,
+                "orderId", result.orderId(),
+                "totalAmount", result.totalAmount(),
                 "message", "Заказ успешно оформлен!"
         );
     }
